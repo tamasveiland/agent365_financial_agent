@@ -1,5 +1,8 @@
 # Unattended Agent ID to Local MCP Demo
 
+For Agent 365 SDK onboarding, observability, and the admin-center Block/Unblock
+demonstration, see [AGENT365.md](AGENT365.md).
+
 A local LangChain agent calls a local, protected MCP server using **Microsoft
 Entra Agent ID**. Authentication has no user, browser, device code, or cached
 Azure CLI login at runtime. Administrator sign-in is required only for setup.
@@ -205,7 +208,8 @@ IDs in `$setup`: delete the child agent, then the blueprint and its principal, a
 the dedicated MCP API app/service principal. Only delete objects created for this
 demo; blueprint deletion can affect all its child identities. Remove locally stored
 demo credentials and any consent granted to Graph PowerShell solely for this demo.
-Tenant agent inventory/Agent 365 registry integration is not implemented here.
+Agent 365 registration is optional; see [AGENT365.md](AGENT365.md) for onboarding
+and the separate registry entry, which must also be removed when retiring the demo.
 
 ## References
 

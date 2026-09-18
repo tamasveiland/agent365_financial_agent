@@ -218,3 +218,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Agent 365 local credentials and generated registration state
+.env.*
+!.env.example
+a365.config.json
+a365.generated.config.json
+.agent365-registration.json

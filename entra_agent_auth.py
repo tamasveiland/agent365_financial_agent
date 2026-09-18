@@ -11,7 +11,9 @@ import httpx2
 
 
 class TokenAcquisitionError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, error_codes: tuple[int, ...] = ()) -> None:
+        super().__init__(message)
+        self.error_codes = error_codes
 
 
 @dataclass(frozen=True)
@@ -39,6 +41,9 @@ class AgentIdentityTokenProvider:
         self._token = ""
         self._renew_at = 0.0
         self._lock = asyncio.Lock()
+
+    def cached_token(self) -> str | None:
+        return self._token if self._token and self.clock() < self._renew_at else None
 
     async def get_token(self) -> str:
         async with self._lock:
@@ -90,8 +95,14 @@ class AgentIdentityTokenProvider:
                 correlation = str(UUID(str(correlation)))
             except ValueError:
                 correlation = "unavailable"
+            raw_codes = payload.get("error_codes", [])
+            error_codes = tuple(number for number in raw_codes
+                                if type(number) is int and 0 < number < 1000000000
+                                ) if isinstance(raw_codes, list) else ()
             raise TokenAcquisitionError(
-                f"{stage}: HTTP {response.status_code}, {code}, correlation_id={correlation}"
+                f"{stage}: HTTP {response.status_code}, {code}, "
+                f"error_codes={error_codes}, correlation_id={correlation}",
+                error_codes=error_codes,
             )
         token = payload.get("access_token")
         try:

@@ -29,7 +29,9 @@ def mcp_http_client(**kwargs) -> httpx2.AsyncClient:
     return httpx2.AsyncClient(**kwargs)
 
 
-async def run_agent(settings: AgentSettings, model: BaseChatModel | None = None) -> str:
+async def run_agent(
+    settings: AgentSettings, model: BaseChatModel | None = None, telemetry=None
+) -> str:
     async with httpx.AsyncClient(timeout=15.0, follow_redirects=False) as identity_client:
         provider = AgentIdentityTokenProvider(
             settings.credentials, settings.server.scope, identity_client
@@ -53,7 +55,7 @@ async def run_agent(settings: AgentSettings, model: BaseChatModel | None = None)
             agent = create_agent(
                 model=model,
                 tools=tools,
-                middleware=[require_initial_tool],
+                middleware=[require_initial_tool, *(telemetry.middleware() if telemetry else [])],
                 system_prompt=(
                     "You summarize fictional portfolio data. Call get_portfolio_summary "
                     "for DEMO-001 before answering. Report holdings, cash, and total in USD. "
@@ -77,6 +79,15 @@ async def run_agent(settings: AgentSettings, model: BaseChatModel | None = None)
             return result["messages"][-1].text
 
 
+async def run_with_observability(settings: AgentSettings) -> str:
+    if settings.telemetry_mode == "off":
+        return await run_agent(settings)
+    from agent365_observability import agent365_session
+
+    async with agent365_session(settings) as telemetry:
+        return await asyncio.wait_for(run_agent(settings, telemetry=telemetry), timeout=180)
+
+
 def main() -> None:
     logging.basicConfig(level=logging.WARNING)
     try:
@@ -85,7 +96,7 @@ def main() -> None:
         logging.error("Configuration: %s", error)
         raise SystemExit(1) from None
     try:
-        print(asyncio.run(run_agent(settings)))
+        print(asyncio.run(run_with_observability(settings)))
     except TokenAcquisitionError as error:
         logging.error("%s", error)
         raise SystemExit(1) from None

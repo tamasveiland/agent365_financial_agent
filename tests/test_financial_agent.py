@@ -37,6 +37,26 @@ class DemoModel(BaseChatModel):
 
 
 class AgentTests(unittest.IsolatedAsyncioTestCase):
+    async def test_token_denial_stops_before_mcp_and_model(self):
+        settings = AgentSettings(ServerSettings(
+            "11111111-1111-1111-1111-111111111111",
+            "33333333-3333-3333-3333-333333333333",
+            "44444444-4444-4444-4444-444444444444",
+        ), AgentCredentials(
+            "11111111-1111-1111-1111-111111111111",
+            "22222222-2222-2222-2222-222222222222",
+            "33333333-3333-3333-3333-333333333333", "test-secret",
+        ), "test-deployment")
+        with patch("financial_agent.AgentIdentityTokenProvider.get_token",
+                   new_callable=AsyncMock,
+                   side_effect=TokenAcquisitionError("agent resource exchange: access denied")), patch(
+            "financial_agent.MCPAdapter"
+        ) as adapter, patch("financial_agent.init_chat_model") as model:
+            with self.assertRaises(TokenAcquisitionError):
+                await run_agent(settings)
+        adapter.assert_not_called()
+        model.assert_not_called()
+
     async def test_real_mcp_transport_and_agent_graph(self):
         server_settings = ServerSettings(
             "11111111-1111-1111-1111-111111111111",

@@ -63,6 +63,7 @@ class AgentSettings:
     server: ServerSettings
     credentials: AgentCredentials = field(repr=False)
     deployment: str
+    telemetry_mode: str = "off"
 
     @classmethod
     def from_env(cls) -> "AgentSettings":
@@ -73,4 +74,7 @@ class AgentSettings:
         )
         required("AZURE_OPENAI_ENDPOINT")
         required("AZURE_OPENAI_API_KEY")
-        return cls(server, credentials, required("AZURE_OPENAI_DEPLOYMENT_NAME"))
+        mode = os.getenv("A365_TELEMETRY_MODE", "off").lower()
+        if mode not in {"off", "console", "agent365"}:
+            raise ValueError("A365_TELEMETRY_MODE must be off, console, or agent365")
+        return cls(server, credentials, required("AZURE_OPENAI_DEPLOYMENT_NAME"), mode)
