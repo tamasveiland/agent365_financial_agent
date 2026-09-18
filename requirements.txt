@@ -1,0 +1,10 @@
+langchain[mcp]==1.4.0
+langchain-openai==1.6.2
+langchain-azure-ai==1.2.10
+python-dotenv==1.2.3
+mcp==2.2.0
+fastmcp==4.0.5
+httpx==0.28.1
+httpx2==2.13.0
+PyJWT[crypto]==2.14.0
+pytest==9.1.1
