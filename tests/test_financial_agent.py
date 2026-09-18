@@ -8,6 +8,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from mcp.server.auth.provider import AccessToken
 from pydantic import Field
 
+from agent365_demo import run_demo
 from config import AgentSettings, ServerSettings
 from entra_agent_auth import AgentCredentials, AgentIdentityAuth, TokenAcquisitionError
 from financial_agent import run_agent
@@ -49,11 +50,15 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
         ), "test-deployment")
         with patch("financial_agent.AgentIdentityTokenProvider.get_token",
                    new_callable=AsyncMock,
-                   side_effect=TokenAcquisitionError("agent resource exchange: access denied")), patch(
+                   side_effect=TokenAcquisitionError("agent resource exchange: access denied",
+                                                     error_codes=(7000112,))), patch(
             "financial_agent.MCPAdapter"
         ) as adapter, patch("financial_agent.init_chat_model") as model:
             with self.assertRaises(TokenAcquisitionError):
                 await run_agent(settings)
+            result = await run_demo(settings)
+            self.assertEqual(result["outcome"], "identity_disabled")
+            self.assertFalse(result["agent_completed"])
         adapter.assert_not_called()
         model.assert_not_called()
 
@@ -94,7 +99,15 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
                 new_callable=AsyncMock, return_value="test-token",
             ):
                 result = await run_agent(settings, model)
+                with patch("financial_agent.init_chat_model", return_value=model) as initialize:
+                    evidence = await run_demo(settings)
+                initialize.assert_called_once()
         self.assertIn("20000", result)
+        self.assertEqual(evidence["mode"], "langchain")
+        self.assertEqual(evidence["outcome"], "allowed")
+        self.assertTrue(evidence["agent_completed"])
+        self.assertTrue(evidence["mcp_tool_called"])
+        self.assertIn("20000", evidence["response"])
         self.assertEqual(model.choices[0], "required")
         self.assertTrue(requests)
         self.assertTrue(all(request.headers.get("Authorization") == "Bearer test-token"

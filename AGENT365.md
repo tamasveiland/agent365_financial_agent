@@ -117,8 +117,21 @@ and the MCP server configuration do not change between modes.
 ## 3. Rehearse Allowed, Blocked, Recovered
 
 Keep the local MCP server running. In the agent shell, confirm the same five Entra
-settings used by the working demo. The probe does not need Azure OpenAI or an
-observability token and makes **no model call**, isolating the authorization result.
+settings and Azure OpenAI settings used by the working demo. By default,
+[agent365_demo.py](agent365_demo.py) runs the LangChain flow shared with
+[financial_agent.py](financial_agent.py): acquire an Agent ID token, discover MCP
+tools with `MCPAdapter`, create the agent with `create_agent()`, and invoke it with
+`agent.ainvoke()`. The first model turn must call a tool, and success requires a
+successful portfolio tool result. `A365_TELEMETRY_MODE` applies to this path too.
+
+To isolate authorization from the model and telemetry, use the optional direct probe:
+
+```powershell
+.\.venv\Scripts\python.exe agent365_demo.py --probe-only --expect allowed
+```
+
+Only `--probe-only` skips LangChain, Azure OpenAI configuration and observability.
+It remains useful for checking a portal block independently of model or export errors.
 
 ### Allowed Baseline
 
@@ -126,8 +139,11 @@ observability token and makes **no model call**, isolating the authorization res
 .\.venv\Scripts\python.exe agent365_demo.py --expect allowed
 ```
 
-Expect exit code `0`, `outcome: allowed`, and `mcp_tool_called: true`. It requested
-a fresh token and invoked the real read-only portfolio tool, not a local fixture.
+Expect exit code `0`, `mode: langchain`, `outcome: allowed`, `agent_completed: true`,
+and `mcp_tool_called: true`, followed by the agent's final summary in `response`.
+The LangChain agent requested a fresh token and called the portfolio tool over MCP;
+the server's returned portfolio is fictional demo data. Console tracing, when
+enabled, also prints SDK spans alongside the JSON result.
 
 ### Block in the Portal
 
@@ -141,15 +157,20 @@ a fresh token and invoked the real read-only portfolio tool, not a local fixture
 ```
 
 Exit code `0` for this expectation requires the recognized Entra identity-disabled
-response `AADSTS7000112`, with no MCP tool call. This is evidence of disabled-identity
-enforcement, not proof of who initiated it. Correlate the returned timestamp and
-Entra correlation ID with the portal/admin audit action. An expired secret, network
-failure, missing role, or telemetry export error does not count as successful blocking.
+response `AADSTS7000112`. An initial token denial prevents agent creation and
+invocation. On failure, the LangChain result reports `agent_completed: false` and
+`mcp_tool_called: null` rather than guessing whether an earlier tool call completed
+before a later failure. Use `--probe-only --expect blocked` for the isolated check,
+which reports `mcp_tool_called: false` when initial token issuance is denied.
+This is evidence of disabled-identity enforcement, not proof of who initiated it.
+Correlate the timestamp and Entra correlation ID with the portal/admin audit action.
+Other token errors and model, transport, timeout or telemetry failures are not
+classified as successful blocking.
 
 If the outcome remains `allowed`, the block is not enforced on this path yet.
 Check propagation, the selected registration and linked IDs, and support for that
-agent type. If another denial code or MCP error appears, investigate it using the
-sign-in/server logs; the probe deliberately marks it inconclusive instead of
+agent type. If another denial code, MCP error or agent error appears, investigate it
+using the sign-in/server logs; the demo deliberately marks it inconclusive instead of
 calling every failure a block. Do not disable the identity separately and present
 that as the admin-center Block action.
 
@@ -158,9 +179,8 @@ that as the admin-center Block action.
 Choose **Unblock** on the same portal entry, save, allow propagation, then run:
 
 ```powershell
-.\.venv\Scripts\python.exe agent365_demo.py --expect allowed
 $env:A365_TELEMETRY_MODE = 'agent365'
-.\.venv\Scripts\python.exe financial_agent.py
+.\.venv\Scripts\python.exe agent365_demo.py --expect allowed
 ```
 
 Capture restored MCP access and the agent's activity record. Do not rotate secrets,
